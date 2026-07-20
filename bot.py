@@ -6,7 +6,9 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, InputMe
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
 
 # ------------------- КОНФИГУРАЦИЯ -------------------
-TOKEN = ''
+TOKEN = os.environ.get('BOT_TOKEN')
+if not TOKEN:
+    raise ValueError("Токен не найден! Добавьте переменную BOT_TOKEN.")
 IMAGES_DIR = r'C:\Users\lakib\OneDrive\Рабочий стол\telegram_gacha\images'
 DATA_FILE = 'gacha_data.json'
 COOLDOWN_SECONDS = 2 * 60 * 60
