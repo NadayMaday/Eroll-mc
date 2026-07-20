@@ -8,7 +8,7 @@ from telegram.ext import Application, CommandHandler, CallbackQueryHandler, Cont
 # ------------------- КОНФИГУРАЦИЯ -------------------
 TOKEN = ''
 IMAGES_DIR = r'C:\Users\lakib\OneDrive\Рабочий стол\telegram_gacha\images'
-DATA_FILE = os.path.join(os.environ['USERPROFILE'], 'gacha_data.json')
+DATA_FILE = 'gacha_data.json'
 COOLDOWN_SECONDS = 2 * 60 * 60
 
 # Конфигурация категорий (без списков файлов — они будут сканироваться)
