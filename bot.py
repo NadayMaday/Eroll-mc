@@ -2,7 +2,7 @@ import os
 import json
 import random
 from datetime import datetime, timedelta
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto BotCommand
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
 
 # ------------------- КОНФИГУРАЦИЯ -------------------
@@ -265,9 +265,19 @@ async def pack_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
         await show_card(update, context, user_id, index)
 
+async def set_commands(app):
+    commands = [
+        BotCommand("start", "Приветствие и справка"),
+        BotCommand("pull", "Вытянуть карточку (раз в 2 часа)"),
+        BotCommand("pack", "Посмотреть коллекцию"),
+        BotCommand("status", "Узнать оставшееся время"),
+        BotCommand("refresh", "Обновить список картинок (админ)"),
+    ]
+    await app.bot.set_my_commands(commands)
+
 # ------------------- ЗАПУСК БОТА -------------------
 def main():
-    app = Application.builder().token(TOKEN).build()
+    app = Application.builder().token(TOKEN).post_init(set_commands).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("status", status))
     app.add_handler(CommandHandler("refresh", refresh))
