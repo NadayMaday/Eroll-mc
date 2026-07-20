@@ -9,7 +9,7 @@ from telegram.ext import Application, CommandHandler, CallbackQueryHandler, Cont
 TOKEN = os.environ.get('BOT_TOKEN')
 if not TOKEN:
     raise ValueError("Токен не найден! Добавьте переменную BOT_TOKEN.")
-IMAGES_DIR = r'C:\Users\lakib\OneDrive\Рабочий стол\telegram_gacha\images'
+IMAGES_DIR = 'images'
 DATA_FILE = 'gacha_data.json'
 COOLDOWN_SECONDS = 2 * 60 * 60
 
