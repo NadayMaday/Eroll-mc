@@ -1,0 +1,9 @@
+__pycache__/
+*.pyc
+*.pyo
+user_data.json
+gacha_data.json
+data.json
+.env
+.vscode/
+.idea/
