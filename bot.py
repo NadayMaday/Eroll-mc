@@ -162,7 +162,6 @@ async def pull(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = str(update.effective_user.id)
     now = datetime.now()
 
-    data = load_data()
     if user_id not in data:
     data[user_id] = {'last_pull': 0, 'collection': {}}
 
