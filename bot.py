@@ -162,10 +162,12 @@ async def pull(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = str(update.effective_user.id)
     now = datetime.now()
 
+    data = load_data()
     if user_id not in data:
-    data[user_id] = {'last_pull': 0, 'collection': {}}
+        data[user_id] = {'last_pull': 0, 'collection': {}}
 
     last_ts = data[user_id].get('last_pull', 0)
+    # ... дальше код проверки кулдауна ...
     if last_ts:
         last_time = datetime.fromtimestamp(last_ts)
         next_time = last_time + timedelta(seconds=COOLDOWN_SECONDS)
