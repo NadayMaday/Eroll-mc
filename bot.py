@@ -190,8 +190,8 @@ async def pull(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     data[user_id]['last_pull'] = now.timestamp()
     collection = data[user_id].get('collection', {})
-collection[card['file_name']] = collection.get(card['file_name'], 0) + 1
-data[user_id]['collection'] = collection
+    collection[card['file_name']] = collection.get(card['file_name'], 0) + 1
+    data[user_id]['collection'] = collection
     save_data(data)
 
     caption = f"{card['emoji']} {card['text']}"
