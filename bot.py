@@ -2,7 +2,7 @@ import os
 import json
 import random
 from datetime import datetime, timedelta
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto, BotCommand
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto, InputMediaAnimation, BotCommand
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
 
 # ------------------- КОНФИГУРАЦИЯ -------------------
@@ -11,7 +11,7 @@ if not TOKEN:
     raise ValueError("Токен не найден! Добавьте переменную BOT_TOKEN.")
 IMAGES_DIR = 'images'
 DATA_FILE = 'gacha_data.json'
-COOLDOWN_SECONDS = 2 * 60 * 60
+COOLDOWN_SECONDS = 30 * 60
 
 # Конфигурация категорий (без списков файлов — они будут сканироваться)
 CATEGORY_CONFIG = {
@@ -164,7 +164,7 @@ async def pull(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     data = load_data()
     if user_id not in data:
-        data[user_id] = {'last_pull': 0, 'collection': []}
+    data[user_id] = {'last_pull': 0, 'collection': {}}
 
     last_ts = data[user_id].get('last_pull', 0)
     if last_ts:
@@ -188,7 +188,9 @@ async def pull(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     data[user_id]['last_pull'] = now.timestamp()
-    data[user_id]['collection'].append(card['file_name'])
+    collection = data[user_id].get('collection', {})
+collection[card['file_name']] = collection.get(card['file_name'], 0) + 1
+data[user_id]['collection'] = collection
     save_data(data)
 
     caption = f"{card['emoji']} {card['text']}"
@@ -205,22 +207,25 @@ async def pack(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if user_id not in data or not data[user_id].get('collection'):
         await update.message.reply_text("📭 Ваша коллекция пуста. Тяните карточки командой /pull!")
         return
-    collection = data[user_id]['collection']
     await show_card(update, context, user_id, 0)
 
 async def show_card(update: Update, context: ContextTypes.DEFAULT_TYPE, user_id: str, index: int):
     data = load_data()
     collection = data[user_id]['collection']
-    if not collection or index < 0 or index >= len(collection):
+    if not collection:
+        return
+    items = list(collection.keys())
+    if index < 0 or index >= len(items):
         return
 
-    file_name = collection[index]
+    file_name = items[index]
+    count = collection[file_name]
     file_path = find_image_file(file_name)
     if not file_path:
         await update.message.reply_text(f"❌ Файл {file_name} не найден.")
         return
 
-    # Определяем категорию по префиксу (для отображения смайлика)
+    # Определяем категорию для смайлика и текста
     category = None
     for cat, config in CATEGORY_CONFIG.items():
         if file_name.startswith(config['prefix']):
@@ -233,25 +238,48 @@ async def show_card(update: Update, context: ContextTypes.DEFAULT_TYPE, user_id:
     else:
         caption = "Карточка"
 
+    caption += f"\n\nКарточка {index+1} из {len(items)} (x{count})"
+
     keyboard = []
     if index > 0:
         keyboard.append(InlineKeyboardButton("◀️ Назад", callback_data=f"pack_{user_id}_{index-1}"))
-    if index < len(collection) - 1:
+    if index < len(items) - 1:
         keyboard.append(InlineKeyboardButton("Вперёд ▶️", callback_data=f"pack_{user_id}_{index+1}"))
     reply_markup = InlineKeyboardMarkup([keyboard]) if keyboard else None
 
     if update.callback_query is None:
-        with open(file_path, 'rb') as photo:
-            await update.message.reply_photo(
-                photo=photo,
-                caption=f"{caption}\n\nКарточка {index+1} из {len(collection)}",
-                has_spoiler=True,
-                reply_markup=reply_markup
-            )
+        if file_path.lower().endswith('.gif'):
+            with open(file_path, 'rb') as anim:
+                await update.message.reply_animation(
+                    animation=anim,
+                    caption=caption,
+                    has_spoiler=True,
+                    reply_markup=reply_markup
+                )
+        else:
+            with open(file_path, 'rb') as photo:
+                await update.message.reply_photo(
+                    photo=photo,
+                    caption=caption,
+                    has_spoiler=True,
+                    reply_markup=reply_markup
+                )
     else:
         query = update.callback_query
         await query.answer()
-        media = InputMediaPhoto(open(file_path, 'rb'), caption=f"{caption}\n\nКарточка {index+1} из {len(collection)}", has_spoiler=True)
+        if file_path.lower().endswith('.gif'):
+            from telegram import InputMediaAnimation
+            media = InputMediaAnimation(
+                media=open(file_path, 'rb'),
+                caption=caption,
+                has_spoiler=True
+            )
+        else:
+            media = InputMediaPhoto(
+                media=open(file_path, 'rb'),
+                caption=caption,
+                has_spoiler=True
+            )
         await query.edit_message_media(media=media, reply_markup=reply_markup)
 
 async def pack_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -264,7 +292,6 @@ async def pack_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.answer("Это не ваша коллекция!", show_alert=True)
             return
         await show_card(update, context, user_id, index)
-
 async def set_commands(app):
     commands = [
         BotCommand("start", "Приветствие и справка"),
