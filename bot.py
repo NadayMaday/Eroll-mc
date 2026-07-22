@@ -11,7 +11,7 @@ if not TOKEN:
     raise ValueError("Токен не найден! Добавьте переменную BOT_TOKEN.")
 IMAGES_DIR = 'images'
 DATA_FILE = 'gacha_data.json'
-COOLDOWN_SECONDS = 30 * 60
+COOLDOWN_SECONDS = 30 * 60  # 30 минут
 
 # Конфигурация категорий (без списков файлов — они будут сканироваться)
 CATEGORY_CONFIG = {
@@ -19,31 +19,31 @@ CATEGORY_CONFIG = {
         'prefix': 'common_',
         'weight': 50,
         'emoji': '💙',
-        'text': 'тебе повезло'
+        'text': 'неплохо'                   # изменено
     },
     'rare': {
         'prefix': 'rare_',
         'weight': 25,
         'emoji': '💜',
-        'text': 'тебе повезло'
+        'text': 'тебе сегодня везет'        # изменено
     },
     'epic': {
         'prefix': 'epic_',
         'weight': 19,
         'emoji': '❤️',
-        'text': 'тебе повезло'
+        'text': 'тебе повезло'              # осталось
     },
     'legend': {
         'prefix': 'legend_',
         'weight': 5,
         'emoji': '💖',
-        'text': 'тебе повезло'
+        'text': 'это твой день, дорогуша'   # изменено
     },
     'porn': {
         'prefix': 'Porn_',
         'weight': 1,
         'emoji': '🖤',
-        'text': 'ого! вот это удача'
+        'text': 'ого! вот это удача'        # не меняем
     }
 }
 
@@ -57,7 +57,7 @@ def scan_images():
     if not os.path.exists(IMAGES_DIR):
         return categories
     for filename in os.listdir(IMAGES_DIR):
-        if not filename.lower().endswith(('.png', '.jpg', '.jpeg')):
+        if not filename.lower().endswith(('.png', '.jpg', '.jpeg', '.gif')):
             continue
         base, ext = os.path.splitext(filename)
         for cat, config in CATEGORY_CONFIG.items():
@@ -102,8 +102,8 @@ def find_image_file(name):
             return os.path.join(IMAGES_DIR, filename)
     return None
 
-def get_random_card():
-    """Выбирает случайную карточку из актуального кеша"""
+def get_random_card(user_id=None):
+    """Выбирает случайную карточку, исключая последнюю вытянутую для данного пользователя (защита от повтора)"""
     available_cats = [(cat, config['weight']) for cat, config in CATEGORY_CONFIG.items() if IMAGE_CACHE.get(cat)]
     if not available_cats:
         return None
@@ -116,7 +116,23 @@ def get_random_card():
         if rand <= cumulative:
             chosen_cat = cat
             break
-    file_name = random.choice(IMAGE_CACHE[chosen_cat])
+
+    files = IMAGE_CACHE[chosen_cat]
+    # Защита от повтора: исключаем последнюю карту, если она есть и в категории >1 файла
+    if user_id and len(files) > 1:
+        data = load_data()
+        last_card = data.get(user_id, {}).get('last_card')
+        if last_card and last_card in files:
+            filtered = [f for f in files if f != last_card]
+            if filtered:   # если остались карты
+                file_name = random.choice(filtered)
+            else:
+                file_name = random.choice(files)
+        else:
+            file_name = random.choice(files)
+    else:
+        file_name = random.choice(files)
+
     config = CATEGORY_CONFIG[chosen_cat]
     return {
         'category': chosen_cat,
@@ -130,7 +146,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "🎲 Привет! Я гача-бот.\n"
         "Команды:\n"
-        "/pull — вытянуть случайную карточку (раз в 2 часа)\n"
+        "/pull — вытянуть случайную карточку (раз в 30 минут)\n"
         "/pack — посмотреть свою коллекцию\n"
         "/status — узнать, когда можно тянуть снова\n"
         "/refresh — обновить список картинок из папки (если добавили новые)"
@@ -167,7 +183,6 @@ async def pull(update: Update, context: ContextTypes.DEFAULT_TYPE):
         data[user_id] = {'last_pull': 0, 'collection': {}}
 
     last_ts = data[user_id].get('last_pull', 0)
-    # ... дальше код проверки кулдауна ...
     if last_ts:
         last_time = datetime.fromtimestamp(last_ts)
         next_time = last_time + timedelta(seconds=COOLDOWN_SECONDS)
@@ -175,10 +190,10 @@ async def pull(update: Update, context: ContextTypes.DEFAULT_TYPE):
             remain = (next_time - now).seconds
             hours = remain // 3600
             minutes = (remain % 3600) // 60
-            await update.message.reply_text(f"❌ Подожди {hours} ч {minutes} мин! Тянуть можно раз в 2 часа.")
+            await update.message.reply_text(f"❌ Подожди {hours} ч {minutes} мин! Тянуть можно раз в 30 минут.")
             return
 
-    card = get_random_card()
+    card = get_random_card(user_id)  # передаём id для защиты от повтора
     if not card:
         await update.message.reply_text("❌ В папке images нет ни одной подходящей картинки. Проверьте имена файлов.")
         return
@@ -188,10 +203,12 @@ async def pull(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"❌ Файл {card['file_name']} не найден в папке images.")
         return
 
+    # Обновляем данные пользователя
     data[user_id]['last_pull'] = now.timestamp()
     collection = data[user_id].get('collection', {})
     collection[card['file_name']] = collection.get(card['file_name'], 0) + 1
     data[user_id]['collection'] = collection
+    data[user_id]['last_card'] = card['file_name']   # запоминаем последнюю карту
     save_data(data)
 
     caption = f"{card['emoji']} {card['text']}"
@@ -201,6 +218,20 @@ async def pull(update: Update, context: ContextTypes.DEFAULT_TYPE):
             caption=caption,
             has_spoiler=True
         )
+import shutil
+from datetime import datetime
+
+def create_backup():
+    """Создаёт копию файла gacha_data.json с датой в имени"""
+    if os.path.exists(DATA_FILE):
+        timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        backup_name = f"gacha_data_backup_{timestamp}.json"
+        shutil.copy2(DATA_FILE, backup_name)
+        print(f"✅ Создан бэкап: {backup_name}")
+        return backup_name
+    else:
+        print("❌ Файл данных не найден, бэкап не создан")
+        return None
 
 async def pack(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = str(update.effective_user.id)
@@ -269,7 +300,6 @@ async def show_card(update: Update, context: ContextTypes.DEFAULT_TYPE, user_id:
         query = update.callback_query
         await query.answer()
         if file_path.lower().endswith('.gif'):
-            from telegram import InputMediaAnimation
             media = InputMediaAnimation(
                 media=open(file_path, 'rb'),
                 caption=caption,
@@ -293,13 +323,26 @@ async def pack_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.answer("Это не ваша коллекция!", show_alert=True)
             return
         await show_card(update, context, user_id, index)
+async def backup(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = str(update.effective_user.id)
+    # Защита: только вы (укажите свой ID)
+    if user_id != '5698800851':   # замените на ваш реальный ID
+        await update.message.reply_text("❌ У вас нет прав на эту команду.")
+        return
+    backup_file = create_backup()
+    if backup_file:
+        await update.message.reply_text(f"✅ Бэкап создан: {backup_file}")
+    else:
+        await update.message.reply_text("❌ Не удалось создать бэкап.")
+
 async def set_commands(app):
     commands = [
         BotCommand("start", "Приветствие и справка"),
-        BotCommand("pull", "Вытянуть карточку (раз в 2 часа)"),
+        BotCommand("pull", "Вытянуть карточку (раз в 30 минут)"),
         BotCommand("pack", "Посмотреть коллекцию"),
         BotCommand("status", "Узнать оставшееся время"),
         BotCommand("refresh", "Обновить список картинок (админ)"),
+        BotCommand("backup", "Создать бэкап коллекции (админ)"),
     ]
     await app.bot.set_my_commands(commands)
 
@@ -311,7 +354,12 @@ def main():
     app.add_handler(CommandHandler("refresh", refresh))
     app.add_handler(CommandHandler("pull", pull))
     app.add_handler(CommandHandler("pack", pack))
+    app.add_handler(CommandHandler("backup", backup))   # добавим обработчик
     app.add_handler(CallbackQueryHandler(pack_callback, pattern="^pack_"))
+    
+    # Создаём бэкап при старте
+    create_backup()
+    
     print("Бот запущен...")
     app.run_polling()
 
