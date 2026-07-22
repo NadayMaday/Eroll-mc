@@ -82,14 +82,41 @@ def load_data():
     if os.path.exists(DATA_FILE):
         try:
             with open(DATA_FILE, 'r', encoding='utf-8') as f:
-                return json.load(f)
-        except (json.JSONDecodeError, OSError):
+                data = json.load(f)
+                if data:  # если словарь не пустой (хотя бы один пользователь)
+                    return data
+                else:
+                    print("⚠️ Файл данных пуст, но не повреждён.")
+                    return {}
+        except (json.JSONDecodeError, OSError) as e:
+            # Файл повреждён – создаём бэкап повреждённого файла
+            timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+            backup_name = f"{DATA_FILE}.corrupted_{timestamp}"
+            shutil.copy2(DATA_FILE, backup_name)
+            print(f"❌ Файл данных повреждён, создан бэкап: {backup_name}")
+            # Создаём новый пустой файл
+            with open(DATA_FILE, 'w', encoding='utf-8') as f:
+                json.dump({}, f, ensure_ascii=False, indent=2)
             return {}
     return {}
 
 def save_data(data):
+    # Сначала делаем резервную копию текущего файла (если он существует)
+    if os.path.exists(DATA_FILE):
+        timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        backup_name = f"{DATA_FILE}.backup_{timestamp}"
+        shutil.copy2(DATA_FILE, backup_name)
+        print(f"✅ Создан бэкап перед сохранением: {backup_name}")
+    # Теперь записываем новые данные
     with open(DATA_FILE, 'w', encoding='utf-8') as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
+def clean_old_backups(keep=5):
+    backup_files = [f for f in os.listdir('.') if f.startswith('gacha_data.json.backup_') and f.endswith('.json')]
+    if len(backup_files) > keep:
+        backup_files.sort()
+        for old in backup_files[:-keep]:
+            os.remove(old)
+            print(f"🗑️ Удалён старый бэкап: {old}")
 
 # ------------------- ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ -------------------
 def find_image_file(name):
