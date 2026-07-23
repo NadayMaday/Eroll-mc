@@ -205,7 +205,12 @@ async def pull(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = str(update.effective_user.id)
     now = datetime.now()
 
-    data = load_data()
+    try:
+        data = load_data()
+    except Exception as e:
+        await update.message.reply_text(f"❌ Ошибка загрузки данных: {e}")
+        return
+
     if user_id not in data:
         data[user_id] = {'last_pull': 0, 'collection': {}}
 
@@ -220,7 +225,13 @@ async def pull(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(f"❌ Подожди {hours} ч {minutes} мин! Тянуть можно раз в 30 минут.")
             return
 
-    card = get_random_card(user_id)  # передаём id для защиты от повтора
+    # Получаем карточку с защитой от повтора
+    try:
+        card = get_random_card(user_id)
+    except Exception as e:
+        await update.message.reply_text(f"❌ Ошибка при выборе карточки: {e}")
+        return
+
     if not card:
         await update.message.reply_text("❌ В папке images нет ни одной подходящей картинки. Проверьте имена файлов.")
         return
@@ -230,21 +241,30 @@ async def pull(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"❌ Файл {card['file_name']} не найден в папке images.")
         return
 
-    # Обновляем данные пользователя
+    # Обновляем данные
     data[user_id]['last_pull'] = now.timestamp()
     collection = data[user_id].get('collection', {})
     collection[card['file_name']] = collection.get(card['file_name'], 0) + 1
     data[user_id]['collection'] = collection
-    data[user_id]['last_card'] = card['file_name']   # запоминаем последнюю карту
-    save_data(data)
+    data[user_id]['last_card'] = card['file_name']
+
+    try:
+        save_data(data)
+    except Exception as e:
+        await update.message.reply_text(f"❌ Ошибка сохранения данных: {e}")
+        return
 
     caption = f"{card['emoji']} {card['text']}"
-    with open(file_path, 'rb') as photo:
-        await update.message.reply_photo(
-            photo=photo,
-            caption=caption,
-            has_spoiler=True
-        )
+    try:
+        with open(file_path, 'rb') as photo:
+            await update.message.reply_photo(
+                photo=photo,
+                caption=caption,
+                has_spoiler=True
+            )
+    except Exception as e:
+        await update.message.reply_text(f"❌ Ошибка при отправке картинки: {e}")
+
 import shutil
 from datetime import datetime
 
